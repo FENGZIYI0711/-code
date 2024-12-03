@@ -3,7 +3,7 @@ module dec22to4(
     output reg [0:3]Y
 );
     always@(*)begin
-    case(w)
+    case(W)
         2'b00:
             Y=4'b1000;
         2'b01:
