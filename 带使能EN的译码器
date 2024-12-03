@@ -4,8 +4,8 @@ module dec22to4(
     output reg [0:3]Y
 );
     always@(*)begin
-    case({EN,w})
-        3'b1100:
+    case({EN,W})
+        3'b100:
             Y=4'b1000;
         3'b101:
             Y=4'b0100;
