@@ -1,0 +1,11 @@
+module dec4to16(
+    input w0,w1,w2,w3,EN,
+    output [0:15]Y,
+    wire [0:3]M
+);
+    dec2to4 Dec1(W[3:2],EN,M[0:3]);
+    dec2to4 Dec2(W[1:0],M[0],Y[0:3]);
+    dec2to4 Dec3(W[1:0],M[1],Y[4:7]);
+    dec2to4 Dec4(W[1:0],M[2],Y[8:11]);
+    dec2to4 Dec5(W[1:0],M[3],Y[12:15]);
+endmodule
