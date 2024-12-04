@@ -1,0 +1,23 @@
+module pipeline2 (
+    input wire clk,                  
+    input wire [31:0] a,               
+    input wire [31:0] b,             
+    input wire [31:0] cin,             
+    output reg [31:0] sum,           
+    output reg [31:0] cout             
+);
+
+    reg [31:0] a_reg1, b_reg1, cin_reg1;
+    reg [31:0] sum_reg1, cout_reg1;
+    
+    always @(posedge clk) begin
+        a_reg1 <= a;
+        b_reg1 <= b;
+        cin_reg1 <= cin;
+
+        {cout_reg1, sum_reg1} <= a + b + cin;
+        sum <= sum_reg1;         
+        cout <= cout_reg1;       
+    end
+
+endmodule
