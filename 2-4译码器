@@ -1,4 +1,4 @@
-module dec22to4(
+module dec2to4(
     input [1:0]W,
     output reg [0:3]Y
 );
@@ -12,7 +12,7 @@ module dec22to4(
             Y=4'b0010;
         2'b11:
             Y=4'b0001;
-        default:Y=4'b00000;
+        default:Y=4'b0000;
     endcase
     end
 endmodule    
