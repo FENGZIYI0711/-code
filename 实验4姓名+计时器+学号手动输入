@@ -1,0 +1,384 @@
+module nametimer(
+    input clk,
+    input reset,
+    input key_control,
+    input add1,
+    input add2,
+    input add3,
+    input add4,
+    output [7:0] pos,
+    output  [15:0] seg
+    );
+     wire clk3051hz;
+    wire add1_xd,add2_xd,add3_xd,add4_xd,key_control_xd;
+    reg sign1;
+    
+   Name Name (clk,reset,sign1,pos[7:4],seg[15:8]);
+   xd xd1(clk,add1,add2,add3,add4,key_control,add1_xd,add2_xd,add3_xd,add4_xd,key_control_xd);
+   seg seg1(clk,reset,add1_xd,add2_xd,add3_xd,add4_xd,pos[3:0],seg[7:0]);
+
+    always@(posedge clk or negedge reset )begin
+        if(!reset)begin
+        sign1=0;
+        end
+        else if(key_control_xd==1)begin
+        sign1=~sign1;
+        end
+      end
+   endmodule
+  
+module Name(
+    input wire clk,
+    input wire reset,
+    input EN,
+    output reg [3:0] pos,
+    output reg [7:0] seg
+);
+    wire  clk3051hz;
+    reg [25:0] count;
+    assign clk3051hz=count[14]; 
+    
+    always@(posedge clk or negedge reset) begin
+        if(!reset)
+            count <= 26'd0;
+        else 
+            count <= count + 26'd1;
+    end
+    
+    reg [13:0] clk1;
+    reg [10:0] clk2;
+    reg [14:0] BCD; // BCD计数器，需要9位来存储99
+    
+    wire [3:0] first;
+    wire [3:0] second;
+    
+    always@(posedge clk or negedge reset) begin
+        if(!reset) begin
+            clk1 <= 14'd0;
+        end else if(clk1 == 14'd10000) begin
+            clk1 <= 14'd0;
+        end else begin
+            clk1 <= clk1 + 14'd1;  
+        end
+    end
+    
+    always@(posedge clk or negedge reset) begin
+        if(!reset) begin
+            clk2 <= 11'd0;
+        end else if(clk2 == 8'd100) begin
+            clk2 <= 11'd0;
+        end else if(clk1 == 14'd10000) begin
+            clk2 <= clk2 + 8'd1;
+        end
+    end
+    
+    always@(posedge clk or negedge reset) begin
+        if(!reset) begin
+            BCD <= 15'd99; // 重置为99
+        end else if(EN == 1) begin
+            if(clk2 == 11'd100) begin
+                BCD <= BCD - 1; // 递减
+            end else if(BCD == 15'd0) begin
+                BCD <= 15'd99; // 重置为99
+            end else begin
+                 BCD<=BCD;
+            end
+        end
+    end
+     assign first = BCD % 10; 
+    assign second = BCD %100/10;
+    
+    reg [1:0]posC;
+    reg [3:0] dataP;
+    
+   always@(posedge clk3051hz or negedge reset)begin
+        if(!reset)
+            posC<=2'd0;
+        else
+            posC<=posC+2'd1;
+    end
+
+    always@(posedge clk3051hz or negedge reset) begin
+        if(!reset)begin
+            pos <= 4'hF;
+        end else begin
+        case(posC)
+          0: begin
+                pos=4'b0001;
+                dataP=first;
+                case(dataP)
+                    4'd0:seg=8'b0011_1111;
+                    4'd1:seg=8'b0000_0110;
+                    4'd2:seg=8'b0101_1011;
+                    4'd3:seg=8'b0100_1111;
+                    4'd4:seg=8'b0110_0110;
+                    4'd5:seg=8'b0110_1101;
+                    4'd6:seg=8'b0111_1101;
+                    4'd7:seg=8'b0000_0111;
+                    4'd8:seg=8'b0111_1111;
+                    4'd9:seg=8'b0110_1111;
+                    default :seg=8'b0000_1000;
+                    endcase
+                end
+                
+                1: begin
+                     pos=4'b0010;
+                    dataP=second;
+                    case(dataP)
+                    4'd0:seg=8'b0011_1111;
+                    4'd1:seg=8'b0000_0110;
+                    4'd2:seg=8'b0101_1011;
+                    4'd3:seg=8'b0100_1111;
+                    4'd4:seg=8'b0110_0110;
+                    4'd5:seg=8'b0110_1101;
+                    4'd6:seg=8'b0111_1101;
+                    4'd7:seg=8'b0000_0111;
+                    4'd8:seg=8'b0111_1111;
+                    4'd9:seg=8'b0110_1111;
+                    default :seg=8'b0000_1000;
+                    endcase
+                    end
+                    
+               2: begin
+                pos = 4'b1000;
+                dataP=10;
+                case(dataP)
+                    4'd10: seg=8'b0110_1110;
+                    default: seg=8'b0000_1000;
+                endcase
+            end
+            
+            3: begin
+                pos = 4'b0100;
+                dataP=11;
+                case(dataP)
+                    4'd11: seg=8'b0101_1010;
+                    default: seg=8'b0000_1000;
+                endcase
+            end
+        endcase
+        end
+    end
+endmodule
+
+    
+    
+
+module xd(
+    input clk,
+    input add1,
+    input add2,
+    input add3,
+    input add4,
+    input key_control,
+    output add1_xd,
+    output add2_xd,
+    output add3_xd,
+    output add4_xd,
+    output key_control_xd
+);
+    reg [20:0] cnt_xd = 21'b0000;
+    wire [4:0]key;//存储按键状态
+    reg [4:0] key_out; 
+    parameter xd = 21'd2000000;    //计时20ms
+
+    assign key[0]=add1;
+    assign key[1]=add2;
+    assign key[2]=add3;
+    assign key[3]=add4;
+    assign key[4]=key_control;
+    
+     always@(posedge clk) begin    //消抖计时
+    if(key == 5'b00000)    //抖动检测周期开始
+        cnt_xd <= 0;
+    else if(cnt_xd == xd)
+        cnt_xd <= xd;
+    else
+        cnt_xd <= cnt_xd+ 1;
+    end
+
+    always@(posedge clk) begin
+    if(cnt_xd == 0)
+        key_out<=5'b00000;
+    else if(cnt_xd == (xd - 21'b1))    //产生1个时间单位的按键信号，关键部分
+        case(key) 
+        5'b00001: key_out <= 5'b00001;   
+        5'b00010: key_out <= 5'b00010;   
+        5'b00100: key_out <= 5'b00100;   
+        5'b01000: key_out <= 5'b01000;   
+        5'b10000: key_out <= 5'b10000;  
+        endcase
+    else
+        key_out<=5'b00000;
+    end
+    assign add1_xd=key_out[0];
+    assign add2_xd=key_out[1];
+    assign add3_xd=key_out[2];
+    assign add4_xd=key_out[3];
+    assign key_control_xd=key_out[4];
+endmodule
+
+module seg(
+    input wire clk,
+    input wire reset,
+    input add1,
+    input add2,
+    input add3,
+    input add4,
+    output reg [3:0]pos,
+    output reg [7:0]seg
+    );
+    wire clk3051hz;
+    reg[25:0]count;
+    assign clk3051hz=count[14];
+    
+    reg [3:0] qianseat = 0;
+    reg [3:0] baiseat = 0;
+    reg [3:0] shiseat = 0;
+    reg [3:0] geseat = 0;
+     
+always@(posedge clk or negedge reset)
+        if(!reset)
+            count<=26'd0;
+        else 
+            count<=count+26'd1;
+            
+ always@(posedge clk or negedge reset)begin
+        if(!reset)begin
+            geseat<=4'd0;
+        end
+        else if(add1==1)begin
+            geseat<=geseat+1;
+        end
+        else if(geseat==4'd10)begin
+            geseat<=0;
+        end
+    end
+
+ always@(posedge clk or negedge reset)begin
+        if(!reset)begin
+            shiseat<=4'd0;
+        end
+        else if(add2==1)begin
+            shiseat<=shiseat+1;
+        end
+        else if(shiseat==4'd10)begin
+            shiseat<=0;
+        end
+    end
+
+ always@(posedge clk or negedge reset)begin
+        if(!reset)begin
+            baiseat<=4'd0;
+        end
+        else if(add3==1)begin
+            baiseat<=baiseat+1;
+        end
+        else if(baiseat==4'd10)begin
+            baiseat<=0;
+        end
+    end
+
+ always@(posedge clk or negedge reset)begin
+        if(!reset)begin
+            qianseat<=4'd0;
+        end
+        else if(add4==1)begin
+            qianseat<=qianseat+1;
+        end
+        else if(qianseat==4'd10)begin
+            qianseat<=0;
+        end
+    end
+
+        reg [3:0] dataP;
+        reg [1:0]posC;
+        
+always@(posedge clk3051hz or negedge reset)begin
+        if(!reset)
+            posC<=2'd0;
+        else
+            posC<=posC+2'd1;
+end
+always@(posedge clk3051hz or negedge reset) begin
+        if(!reset) begin
+            pos <= 4'hF;
+        end else begin
+            case(posC)
+                0: begin
+                    pos <= 4'b0001;
+                    dataP <= geseat;
+                case (dataP)
+                4'd0: seg <= 8'b0011_1111;
+                4'd1: seg <= 8'b0000_0110;
+                4'd2: seg <= 8'b0101_1011;
+                4'd3: seg <= 8'b0100_1111;
+                4'd4: seg <= 8'b0110_0110;
+                4'd5: seg <= 8'b0110_1101;
+                4'd6: seg <= 8'b0111_1101;
+                4'd7: seg <= 8'b0000_0111;
+                4'd8: seg <= 8'b0111_1111;
+                4'd9: seg <= 8'b0110_1111;
+                default: seg <= 8'b0000_1000;
+            endcase
+                end
+                
+                1: begin
+                    pos <= 4'b0010;
+                    dataP <= shiseat;
+                case (dataP)
+                4'd0: seg <= 8'b0011_1111;
+                4'd1: seg <= 8'b0000_0110;
+                4'd2: seg <= 8'b0101_1011;
+                4'd3: seg <= 8'b0100_1111;
+                4'd4: seg <= 8'b0110_0110;
+                4'd5: seg <= 8'b0110_1101;
+                4'd6: seg <= 8'b0111_1101;
+                4'd7: seg <= 8'b0000_0111;
+                4'd8: seg <= 8'b0111_1111;
+                4'd9: seg <= 8'b0110_1111;
+                default: seg <= 8'b0000_1000;
+            endcase
+                end
+                
+                2: begin
+                    pos <= 4'b0100;
+                    dataP <= baiseat;
+                case (dataP)
+                4'd0: seg <= 8'b0011_1111;
+                4'd1: seg <= 8'b0000_0110;
+                4'd2: seg <= 8'b0101_1011;
+                4'd3: seg <= 8'b0100_1111;
+                4'd4: seg <= 8'b0110_0110;
+                4'd5: seg <= 8'b0110_1101;
+                4'd6: seg <= 8'b0111_1101;
+                4'd7: seg <= 8'b0000_0111;
+                4'd8: seg <= 8'b0111_1111;
+                4'd9: seg <= 8'b0110_1111;
+                default: seg <= 8'b0000_1000;
+            endcase
+                end
+                
+                3: begin
+                    pos <= 4'b1000;
+                    dataP <= qianseat;
+                case (dataP)
+                4'd0: seg <= 8'b0011_1111;
+                4'd1: seg <= 8'b0000_0110;
+                4'd2: seg <= 8'b0101_1011;
+                4'd3: seg <= 8'b0100_1111;
+                4'd4: seg <= 8'b0110_0110;
+                4'd5: seg <= 8'b0110_1101;
+                4'd6: seg <= 8'b0111_1101;
+                4'd7: seg <= 8'b0000_0111;
+                4'd8: seg <= 8'b0111_1111;
+                4'd9: seg <= 8'b0110_1111;
+                default: seg <= 8'b0000_1000;
+            endcase
+                end
+            endcase
+        end
+    end
+     
+endmodule
+  
