@@ -1,0 +1,80 @@
+`timescale 1ns / 1ps
+
+module proc_fsm (
+    input wire clk,
+    input wire rst,
+    input wire w,
+    input wire [1:0] F,  // 操作码
+    input wire [1:0] Rx, // 寄存器 Rx
+    input wire [1:0] Ry, // 寄存器 Ry
+    output wire Done,
+    output wire [3:0] Rin,
+    output wire [3:0] Rout,
+    output wire Ain,
+    output wire Gin,
+    output wire Gout,
+    output wire addsub,
+    output wire externx
+);
+
+    wire FRIN, clear;
+    wire [3:0] I, T, rx_reg, ry_reg;
+    wire [5:0] func;
+    reg [5:0] funcreg;
+    reg [3:0] rin, rout;
+    reg [1:0] cnt;
+    integer i;
+
+    always @(posedge clk) begin
+        if (!clear)
+            cnt <= cnt + 1;
+        else
+            cnt <= 2'b00;
+    end
+
+    assign clear = Done|rst|(~w&T[0]);
+    assign FRIN = w & T[0];
+    assign func = {F, Rx, Ry};
+
+    always @(posedge clk) begin
+        if (FRIN)
+            funcreg <= func;
+    end
+
+    dec2to4 T1(cnt, T);
+    dec2to4 dec1(funcreg[5:4], I);
+    dec2to4 dec2(funcreg[3:2], rx_reg);
+    dec2to4 dec3(funcreg[1:0], ry_reg);
+
+    always @(I, T, rx_reg, ry_reg) begin
+        for (i=0; i<4; i=i+1) begin
+            rin[i] = ((I[0] | I[1]) & T[1] & rx_reg[i]) | ((I[2] | I[3]) & T[3] & rx_reg[i]);
+            rout[i] = (I[1] & T[1] & ry_reg[i]) | ((I[2] | I[3]) & ((T[1] & rx_reg[i]) | (T[2] & ry_reg[i])));
+        end
+    end
+
+        assign Done=((I[0]|I[1])&T[1])|((I[2]|I[3])&T[3]);
+        assign Ain=(I[2]|I[3])&T[1];
+        assign Gin=(I[2]|I[3])&T[2];
+        assign Gout=(I[2]|I[3])&T[3];
+        assign externx=I[0]&T[1];
+        assign addsub=~I[3];
+        assign Rin=rin;
+        assign Rout=rout;
+
+endmodule
+
+module dec2to4 (
+    input [1:0] W,
+    output reg [0:3] Y
+);
+    always @(W) begin
+        case (W)
+            2'b00: Y = 4'b0001;
+            2'b01: Y = 4'b0010;
+            2'b10: Y = 4'b0100;
+            2'b11: Y = 4'b1000;
+            default: Y = 4'b0000;
+        endcase
+    end
+endmodule
