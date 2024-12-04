@@ -1,0 +1,41 @@
+module pipeline_adder(
+    input wire clk,                    
+    input wire [31:0] a,              
+    input wire [31:0] b,             
+    input wire cin,                  
+    output reg [31:0] sum,             
+    output reg cout                    
+);
+
+    reg partial_carry1,partial_carry2,partial_carry3;
+    reg [7:0] partial_sum1,thirdina,thirdinb;
+    reg [15:0] partial_sum2,secondina,secondinb;
+    reg [23:0] partial_sum3,firstina,firstinb;
+
+
+    always @(posedge clk) begin
+        {partial_carry1, partial_sum1} <= a[7:0] + b[7:0] +cin;
+        firstina <= a[31:8];
+        firstinb <= b[31:8];
+    end
+
+    always @(posedge clk) begin
+        {partial_carry2, partial_sum2[15:8]} <= firstina[7:0] +firstinb[7:0] + partial_carry1;
+        partial_sum2[7:0] <= partial_sum1;
+        secondina <= firstina[23:8];
+        secondinb <= firstinb[23:8];
+    end
+  
+    always @(posedge clk) begin
+       {partial_carry3, partial_sum3[23:16]} <=secondina[7:0]+secondinb[7:0]+partial_carry2;
+        partial_sum3[15:0] <= partial_sum2;
+        thirdina <=secondina[15:8];
+        thirdinb <=secondinb[15:8];
+    end
+
+    always @(posedge clk) begin
+     {cout,sum[31:24]} <= thirdina[7:0]+thirdinb[7:0]+partial_carry3;
+     sum[23:0] <=partial_sum3;
+    end
+
+endmodule
