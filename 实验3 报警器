@@ -1,0 +1,181 @@
+`timescale 1ns / 1ps
+
+module ALARM_SYSTEM(
+    input clk,    
+    input rst,   
+    input [1:0] key,    //按键输入，控制输入
+    output [0:7] seg_cs,   //数码管位选
+    output [0:7] seg_data0,   //前四个数码管显示
+    input sw0,   //控制输入倍数改变led灯的闪烁频率
+    input sw1,
+	output reg led
+    );
+    reg [24:0]cnt_spark;
+    reg [0:1] key_out;    //输出按下哪一位按键
+    reg [0:20] cnt_xd = 0;    //消抖计时
+    reg [0:20] cnt = 0;
+    reg [0:7] smg;//数码管赋值位数
+    reg [0:7] wz;//
+    reg [0:3] num;
+     reg [0:3]number;
+    reg cnt_wz = 1'b0;
+    reg DIR = 1'b0;
+    wire [0:3] gw;   //个位
+    wire [0:3] sw;   //十位
+    reg [3:0]C;//实际通过按键输入的位数来选择倍数1,2,4,8
+    reg flag;
+    reg middle;//按键的计数器
+    parameter xd = 21'd2000000;    //计时_20ms
+
+    always@(posedge clk) begin    //消抖计时
+    if(key == 5'b00000)    //抖动即重新开始
+        cnt_xd <= 0;
+    else if(cnt_xd == xd)
+        cnt_xd <= xd;
+    else
+        cnt_xd <= cnt_xd + 1;
+    end
+
+    always@(posedge clk) begin
+    if(cnt_xd == 0)
+        key_out <= 0;
+    else if(cnt_xd == (xd - 21'b1))    //产生1个时间单位的按键信号，关键部分
+        case(key)     //根据键入得到对应的值
+        2'b10: key_out <= 1;   
+        2'b01: key_out <= 2;   
+        endcase
+    else
+        key_out <= 0;   //0表示无按键按下
+    end
+
+    always@(sw0,sw1)begin//按键对应的倍率模块
+        if({sw1,sw0}==2'b00)
+        C=1;
+        if({sw1,sw0}==2'b01)
+        C=2;
+        if({sw1,sw0}==2'b10)
+        C=4;
+        if({sw1,sw0}==2'b11)
+        C=8;
+    end
+	
+    always@(num)begin   //number定义模块
+        if(num)
+            number=num;
+        else
+            number=1;
+    end
+	
+	always@(posedge clk or negedge rst)//控制led灯的闪烁周期
+	begin 
+	if(!rst)
+		cnt_spark <= 25'd0;
+	else if(cnt_spark==25'd24_999_999/C/number)
+		cnt_spark <= 25'd0;
+	else
+		cnt_spark <= cnt_spark+ 25'd1;
+	
+	end
+
+    parameter X=1'b1,Y=1'b0;
+    always@(posedge clk) begin
+         if(!rst)begin
+        num =0;
+        flag=0;
+        end
+        else if(key_out == 1)begin
+        flag=~flag;
+        middle=Y;
+        if(flag==1)begin
+        num=num+1;
+        middle=X;
+             end
+        end
+         else if(key_out == 2)
+        begin
+        num=1;
+        flag=0;
+         end
+        else begin
+        num=num;
+        flag=flag;
+        end
+    end
+    
+    
+    always@(posedge clk or negedge rst)
+	begin
+		if(!rst)
+		led <= 1'b1;
+        else if(num)begin
+            if(middle)begin
+                if(cnt_spark == 25'd24_999_999/C/number)
+		        led <= ~led;
+                else
+                led <= led;
+            end 
+            else
+            led<=0;
+            end
+        else
+        led<=0;
+	end
+    
+
+    always@(posedge clk) begin   //数码管扫描计时
+        if(cnt == 21'd200000)  //100MHz
+         begin
+        cnt <= 0;
+        cnt_wz <= ~cnt_wz;
+        end
+        else
+        cnt <= cnt +1;  
+        end
+
+    always@(posedge clk) begin
+        case(cnt_wz)   //决定哪一位数码管亮，决定的是前两位的数码管亮
+        1'd0: wz <= 8'b10000000;
+        1'd1: wz <= 8'b01000000;
+        default: wz <= 8'b00000000;
+        endcase
+    end
+
+    assign sw = (num <= 9)?0:1;   //十位
+    assign gw = (num <= 9)?num:(num + 6);   //个位
+    
+    always @(posedge clk) begin
+    if(cnt_wz == 0)
+        case(sw)   
+        4'd0: smg <= 8'b11111100;
+        4'd1: smg <= 8'b01100000;
+        4'd2: smg <= 8'b11011010;
+        4'd3: smg <= 8'b11110010;
+        4'd4: smg <= 8'b01100110;
+        4'd5: smg <= 8'b10110110;
+        4'd6: smg <= 8'b10111110;
+        4'd7: smg <= 8'b11100000;
+        4'd8: smg <= 8'b11111110;
+        4'd9: smg <= 8'b11110110;
+        default: smg <= 8'b00000000;
+        endcase
+    else if(cnt_wz == 1)
+        case(gw)   
+        4'd0: smg <= 8'b11111100;
+        4'd1: smg <= 8'b01100000;
+        4'd2: smg <= 8'b11011010;
+        4'd3: smg <= 8'b11110010;
+        4'd4: smg <= 8'b01100110;
+        4'd5: smg <= 8'b10110110;
+        4'd6: smg <= 8'b10111110;
+        4'd7: smg <= 8'b11100000;
+        4'd8: smg <= 8'b11111110;
+        4'd9: smg <= 8'b11110110;
+        default: smg <= 8'b00000000;
+        endcase
+    else
+        smg <= 8'b00000000;    //不同类型间的分隔符
+    end
+
+    assign seg_data0 = smg;    //段码输送
+    assign seg_cs = wz;     //位选输送
+endmodule
