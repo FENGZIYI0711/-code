@@ -1,0 +1,233 @@
+module reaction_coutner(
+    input clk,
+    input reset,
+    input start,
+    input stop ,
+    output [3:0] pos,
+    output  [7:0] seg,
+    output wire [15:0] LED
+);
+wire EN;
+wire start_xd,stop_xd;
+wire resetn=~reset;
+
+xd xd1(clk,start,stop,start_xd,stop_xd);
+seg seg1(clk,reset,EN,pos,seg);
+state state1(clk,resetn,start_xd,stop_xd,EN,LED);
+endmodule
+
+module xd(
+    input clk,
+    input start,
+    input stop,
+    output start_xd,//消抖后的开始信号
+    output stop_xd // 消抖后的停止信号
+);
+    reg [20:0] cnt_xd = 21'b0000;
+    wire [1:0]key;//存储按键状态
+    reg [1:0] key_out; 
+    parameter xd = 21'd2000000;    //计时20ms
+
+    assign key[0]=start;
+    assign key[1]=stop;
+
+    always@(posedge clk) begin   //消抖计时周期
+    if(key == 2'b00)  
+        cnt_xd <= 0;
+    else if(cnt_xd == xd)
+        cnt_xd <= xd;
+    else
+        cnt_xd <= cnt_xd + 1;
+    end
+
+    always@(posedge clk) begin //产生按键消抖后的按键信号
+    if(cnt_xd == 0)
+        key_out<=2'b00; //如果计时器为0，重置key_out
+    else if(cnt_xd == (xd - 21'd1))   
+        case(key) 
+            2'b01: key_out[0] <= 1;   //start_xd
+            2'b10: key_out[1] <= 1;   //stop_xd
+        endcase
+    else
+        key_out <= 2'b00;
+    end
+
+    assign start_xd=key_out[0];
+    assign stop_xd=key_out[1];
+endmodule
+
+module seg (
+    input wire clk,
+    input wire rst,
+    input EN,
+    output reg [3:0]pos,
+    output reg [7:0]seg
+);
+    wire clk3051hz;
+    reg [25:0]count;
+    
+    reg [13:0]clk1;
+    reg [7:0]clk2;
+    reg [8:0]BCD;
+    
+    wire [3:0]shiseat;
+    wire [3:0]geseat;
+ 
+    always@(posedge clk or negedge rst)begin   //计数器count
+        if(!rst)
+            count<=26'd0;
+        else 
+            count<=count+26'd1;
+        end
+
+    always@(posedge clk or negedge rst)begin   //计数器clk1
+    if(!rst)begin
+        clk1<=14'd0;
+        end
+    else if(clk1==14'd10000)begin
+        clk1<=14'd0;
+        end
+    else
+        clk1<=clk1+14'd1;  
+     end
+    
+    always@(posedge clk or negedge rst)begin
+    if(!rst)begin
+        clk2<=8'd0;
+    end
+    else if(clk2==8'd100)begin
+        clk2<=8'd0;
+    end
+    else if(clk1==14'd10000)
+        clk2<=clk2+8'd1;
+    end
+    
+    always@(posedge clk or negedge rst)begin
+    if(!rst)
+        BCD<=14'd0;
+    else if(EN==1)begin
+        if(clk2==8'd100)
+            BCD<=BCD+1;
+        else if(BCD==8'd99)
+            BCD<=14'd0;
+        end
+    else begin
+            BCD<=BCD;
+        end
+    end
+    
+    assign geseat=BCD%10;
+    assign shiseat=BCD%100/10;
+
+    reg posC;
+    reg [3:0]dataP;
+    assign clk3051hz=count[14];
+    
+    always@(posedge clk3051hz or negedge rst)begin
+        if(!rst)
+            posC<=0;
+        else
+            posC<=~posC;
+    end
+
+    always@(posedge clk3051hz or negedge rst)begin
+        if(!rst)begin
+            pos=4'hF;
+        end
+        else begin
+            case(posC)
+            0:begin
+                pos=4'b0001;
+                dataP=geseat;
+                case (dataP)
+                    4'd0:seg=8'b0011_1111;
+                    4'd1:seg=8'b0000_0110;
+                    4'd2:seg=8'b0101_1011;
+                    4'd3:seg=8'b0100_1111;
+                    4'd4:seg=8'b0110_0110;
+                    4'd5:seg=8'b0110_1101;
+                    4'd6:seg=8'b0111_1101;
+                    4'd7:seg=8'b0000_0111;
+                    4'd8:seg=8'b0111_1111;
+                    4'd9:seg=8'b0110_1111;
+                    default :seg=8'b0000_1000;
+                endcase
+            end
+            1:begin
+                pos=4'b0010;
+                dataP=shiseat;
+                case (dataP)
+                    4'd0:seg=8'b0011_1111;
+                    4'd1:seg=8'b0000_0110;
+                    4'd2:seg=8'b0101_1011;
+                    4'd3:seg=8'b0100_1111;
+                    4'd4:seg=8'b0110_0110;
+                    4'd5:seg=8'b0110_1101;
+                    4'd6:seg=8'b0111_1101;
+                    4'd7:seg=8'b0000_0111;
+                    4'd8:seg=8'b0111_1111;
+                    4'd9:seg=8'b0110_1111;
+                    default :seg=8'b0000_1000;
+                endcase
+            end
+            endcase
+        end
+    end
+endmodule
+
+module state(
+     input clk,
+     input reset,
+     input start,
+     input stop,
+     output reg EN,
+     output reg [15:0] LED
+);
+    parameter IDLE=1'b0;
+    parameter START=1'b1;
+    reg [2:0] current_state, next_state;
+    
+always @(posedge clk or posedge reset) begin
+    if (reset) begin
+         current_state <= IDLE;
+     end else begin
+         current_state <= next_state;
+       end
+    end
+    
+always@(*)begin
+   case(current_state)
+       IDLE:begin
+             if(start)begin
+                 next_state<=START;
+             end
+         else begin
+                next_state<=IDLE;
+             end
+         end
+         
+       START:begin
+         if(stop||reset)begin
+            next_state<=IDLE;
+         end else begin
+             next_state<=START;
+           end
+         end
+       endcase
+end
+
+     always @(posedge clk) begin
+         case (current_state)
+         IDLE: begin
+             LED  <= 16'h0000;
+             EN <= 0;
+             end
+             
+         START: begin
+             LED <= 16'hFFFF;
+             EN <= 1;
+            end
+         endcase
+     end
+     
+endmodule
