@@ -1,0 +1,139 @@
+`timescale 1ns / 1ps
+
+module flash_led_top(
+    input wire clk,
+    input wire rst_n,
+    input wire [7:0]sw0,
+    output wire[15:0] led
+);
+    wire clk_bps;
+    wire rst;
+    wire signed [3:0] speed;
+    assign rst = ~rst_n;//低电平有效的复位信号rst_n转换为高电平有效的复位信号rst
+    
+    speed_ctl speed_ctl1(
+        .sw0(sw0),
+        .speed(speed)
+    );
+    
+    counter counter1(
+        .clk (clk),
+        .rst (rst),
+        .speed(speed),
+        .clk_bps (clk_bps)
+    );
+
+    flash_led_ctl flash_led_ctl1(
+        .clk (clk),
+        .rst (rst),
+        .speed (speed),
+        .clk_bps (clk_bps),
+        .led  (led)
+    );
+endmodule
+
+module speed_ctl(
+    input wire [7:0] sw0,
+    output wire signed[3:0]speed
+   );
+   integer ss;//整数类型变量用于循环计数
+   reg [3:0] high_counter;
+   
+   always@(*)begin
+        high_counter=0;
+        for(ss=0;ss<8;ss=ss+1)begin
+            if(sw0[ss])begin
+                high_counter=high_counter+1;
+            end
+         end
+      end
+      assign speed=high_counter-4;
+endmodule
+ 
+
+module counter(
+  input  wire clk,
+  input  wire rst,
+  input wire [3:0] speed,
+  output wire clk_bps
+);
+  reg [13:0] counter_first,counter_second;
+  reg [3:0]abs_speed;
+
+    always@(*)begin
+        if(speed[3])
+            abs_speed=~speed+1;
+        else
+             abs_speed=speed;
+        end
+        
+    always @(posedge clk or posedge rst) begin
+    if (rst) begin
+        counter_first <= 14'd0;
+        end  else if (abs_speed > 0) begin
+          if(counter_first==14'd10000/(abs_speed/8))begin
+                    counter_first <= 14'd0;
+           end 
+           else begin
+                counter_first <=counter_first+1'b1;
+             end
+        end
+  end
+
+    always @(posedge clk or posedge rst) begin
+    if (rst) begin
+        counter_second <= 14'd0;
+     end  else if (abs_speed > 0) begin
+         if(counter_second==14'd10000/(abs_speed/8))begin
+                counter_second<= 14'd0;
+          end else if (counter_first == 14'd10000 / (abs_speed / 8)) begin
+                    counter_second <= counter_second+1'b1;
+            end
+          end
+    end
+    
+    assign clk_bps = counter_second == (14'd10000 / (abs_speed / 8))?1'b1:1'b0;
+
+endmodule
+
+
+module flash_led_ctl(
+    input  wire  clk,
+    input  wire  rst,
+    input signed [3:0] speed,
+    input  wire  clk_bps,
+    output reg  [15:0] led
+);
+      reg dir;
+      
+    always @( posedge clk or posedge rst )begin
+        if (rst)begin
+            led <= 16'h8000;
+            dir <=1'b0;
+        end
+        else begin 
+        if(speed>0)begin
+            dir <=1'b0;//正方向
+        end 
+        else begin
+            dir <=1'b1;//反方向
+         end
+         
+         if(clk_bps)begin
+            case (dir)
+                1'b0: //从左向右
+                    if (led!= 16'd1 )
+                        led <= led >> 1'b1;
+                    else
+                        led <= 16'h8000;
+                1'b1: //从右向左
+                    if (led!= 16'h8000 )
+                        led <= led << 1'b1;
+                    else
+                        led <= 16'd1;
+            endcase
+           end
+     end
+   end
+ 
+endmodule
