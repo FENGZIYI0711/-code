@@ -1,0 +1,118 @@
+`timescale 1ns / 1ps
+
+module HalfAdder(
+    input A,    
+    input B,    
+    output Sum, 
+    output Carry 
+);
+    assign Sum = A ^ B;   
+    assign Carry = A & B;  
+endmodule
+
+module FullAdder(
+    input wire A,  
+    input wire B,   
+    input Cin,      
+    output wire Sum, 
+    output wire Cout 
+);
+    wire sum_ha1, carry_ha1, carry_ha2;
+
+    HalfAdder HA1(
+        .A(A),
+        .B(B),
+        .Sum(sum_ha1),
+        .Carry(carry_ha1)
+    );
+
+    HalfAdder HA2(
+        .A(sum_ha1),
+        .B(Cin),
+        .Sum(Sum),
+        .Carry(carry_ha2)
+    );
+
+    assign Cout = carry_ha1 | carry_ha2;
+endmodule
+
+module TwoBitAdderSubtractor(
+    input wire [1:0] A,  // 两位输入 A
+    input wire [1:0] B,  // 两位输入 B
+    input wire Option,       // 运算选择：0 为加法，1 为减法
+    output wire [1:0] Sum, // 两位运算结果
+    output wire Cout    // 进位/借位输出
+);
+    wire [1:0] B_complement; // B 的补码，用于减法
+    wire temp_carry;
+
+    assign B_complement = B ^ {2{Option}}; // Op 为 1 时取反 B，Op 为 0 时保持 B
+
+    FullAdder FA1 (
+        .A(A[0]),
+        .B(B_complement[0]),
+        .Cin(Option),       // 如果是减法，则初始进位为 1
+        .Sum(Sum[0]),
+        .Cout(temp_carry)
+    );
+
+    FullAdder FA2 (
+        .A(A[1]),
+        .B(B_complement[1]),
+        .Cin(temp_carry),
+        .Sum(Sum[1]),
+        .Cout(Cout)
+    );
+endmodule
+
+module segMsg(
+    input [3:0] data,    // 输入的四位二进制数
+    output reg [3:0] pos,
+    output reg [7:0] seg      // 七段数码管的控制信号，{a, b, c, d, e, f, g}
+);
+    always @(data) begin
+        pos = 4'b0001;
+        case(data)
+            4'b0000: seg = 8'b0011_1111; // 显示 0
+            4'b0001: seg = 8'b0000_0110; // 显示 1
+            4'b0010: seg = 8'b0101_1011; // 显示 2
+            4'b0011: seg = 8'b0100_1111; // 显示 3
+            4'b0100: seg = 8'b0110_0110; // 显示 4
+            4'b0101: seg = 8'b0110_1101; // 显示 5
+            4'b0110: seg = 8'b0111_1101; // 显示 6
+            4'b0111: seg = 8'b0000_0111; // 显示 7
+            4'b1000: seg = 8'b0111_1111; // 显示 8
+            4'b1001: seg = 8'b0110_1111; // 显示 9
+            default: seg = 8'b0000_1000; // 显示 '-'
+        endcase
+    end
+endmodule
+
+module TopModule(
+    input wire [1:0] A,  // 两位输入 A
+    input wire [1:0] B,  // 两位输入 B
+    input wire Option,   // 运算选择：0 为加法，1 为减法
+    output wire [3:0] pos, // 数码管位选信号
+    output wire [7:0] seg  // 数码管段选信号
+);
+
+    wire [1:0] result;  // 存储加法/减法结果
+    wire carry;         // 存储进位/借位结果
+
+    // 实例化 TwoBitAdderSubtractor 模块
+    TwoBitAdderSubtractor adder_subtractor (
+        .A(A),
+        .B(B),
+        .Option(Option),
+        .Sum(result),
+        .Cout(carry)
+    );
+
+    // 实例化 segMsg 模块，用于显示计算结果
+    segMsg display (
+        .data({carry, result}),  // 将 结果 和 进位拼接为 4 位数用于显示
+        .pos(pos),
+        .seg(seg)
+    );
+
+endmodule
