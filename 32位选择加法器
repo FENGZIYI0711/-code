@@ -1,0 +1,50 @@
+module rcadd32(
+    input [31:0]a,
+    input [31:0]b,
+    input cin,
+    output [31:0]sum,
+    output cout
+);
+    wire c1,c2,c3;
+    add8_select a81(a[7:0],b[7:0],cin,sum[7:0],c1);
+    add8_select a82(a[15:8],b[15:8],c1,sum[15:8],c2);
+    add8_select a83(a[23:16],b[23:16],c2,sum[23:16],c3);
+    add8_select a84(a[31:24],b[31:24],c3,sum[31:24],cout);
+endmodule
+
+module add8_select(
+    input [7:0]a,
+    input [7:0]b,
+    input cin,
+    output [7:0]sum,
+    output cout
+    );
+    wire c1;
+    add4_select a41(a[3:0],b[3:0],cin,sum[3:0],c1);
+    add4_select a42(a[7:4],b[7:4],c1,sum[7:4],cout);
+    endmodule
+    
+module add4_select(
+    input [3:0]a,
+    input [3:0]b,
+    input cin,
+    output[3:0]sum,
+    output cout
+    );
+    wire c1,c2,c3;
+    add1_select a1(a[0],b[0],cin,sum[0],c1);
+    add1_select a2(a[1],b[1],c1,sum[1],c2);
+    add1_select a3(a[2],b[2],c2,sum[2],c3);
+    add1_select a4(a[3],b[3],c3,sum[3],cout);
+    endmodule
+    
+    module add1_select(
+    input a,
+    input b,
+    input cin,
+    output sum,
+    output cout);
+    assign #4 sum=a^b^cin;
+    assign #2 cout=(cin==1)|(cin==0)?(a&cin)|(b&cin)|(a&b):1'bx;
+    endmodule
+  
