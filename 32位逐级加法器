@@ -1,0 +1,78 @@
+module csadd32(
+    input [31:0]a,
+    input [31:0]b,
+    input cin,
+    output [31:0]s,
+    output cout
+  );
+    wire c1,c2,c3,c4,c5,c6;
+    wire [31:0]s0,s1;
+    wire cout0,cout1;
+        csadd8 c0a81(a[7:0],b[7:0],0,s0[7:0],c1);
+        csadd8 c0a82(a[15:8],b[15:8],c1,s0[15:8],c2);
+        csadd8 c0a83(a[23:16],b[23:16],c2,s0[23:16],c3);
+        csadd8 c0a84(a[31:24],b[31:24],c3,s0[31:24],cout0);  
+
+        csadd8 c1a81(a[7:0],b[7:0],1,s1[7:0],c4);
+        csadd8 c1a82(a[15:8],b[15:8],c4,s1[15:8],c5);
+        csadd8 c1a83(a[23:16],b[23:16],c5,s1[23:16],c6);
+        csadd8 c1a84(a[31:24],b[31:24],c6,s1[31:24],cout1);
+
+        assign s=cin?s1:s0;
+        assign cout =cin?cout1:cout0;
+endmodule
+
+module csadd8(
+    input [7:0]a,
+    input [7:0]b,
+    input cin,
+    output [7:0]s,
+    output cout
+);
+    wire c1,c2;
+    wire [7:0] s0,s1;
+    wire cout0,cout1;
+        csadd4 c0a41 (a[3:0],b[3:0],0,s0[3:0],c1);
+        csadd4 c0a42 (a[7:4],b[7:4],c1,s0[7:4],cout0);
+
+        csadd4 c1a41 (a[3:0],b[3:0],1,s1[3:0],c2);
+        csadd4 c1a42 (a[7:4],b[7:4],c2,s1[7:4],cout1);
+
+        assign s=cin?s1:s0;
+        assign cout=cin?cout1:cout0;
+endmodule
+
+module csadd4(
+    input [3:0]a,
+    input [3:0]b,
+    input cin,
+    output [3:0]s,
+    output cout
+    );
+    wire c1,c2,c3,c4,c5,c6;
+    wire [3:0]s0,s1;
+    wire cout0,cout1;
+    add1 c0a1(a[0],b[0],0,s0[0],c1);
+    add1 c0a2(a[1],b[1],c1,s0[1],c2);
+    add1 c0d3(a[2],b[2],c2,s0[2],c3);
+    add1 c0a4(a[3],b[3],c3,s0[3],cout0);
+    
+    add1 c1a1(a[0],b[0],0,s1[0],c4);
+    add1 c1a2(a[1],b[1],c4,s1[1],c5);
+    add1 c1a3(a[2],b[2],c5,s1[2],c6);
+    add1 c1a4(a[3],b[3],c6,s1[3],cout1);
+    
+    assign s=cin?s1:s0;
+    assign cout=cin?cout1:cout0;
+endmodule
+
+module add1(
+    input a,
+    input b,
+    input cin,
+    output sum,
+    output cout
+    );
+    assign #4 sum=a^b^cin;
+    assign #2 cout=(cin==1)|(cin==0)?(a&cin)|(b&cin)|(a&b):1'bx;
+endmodule
