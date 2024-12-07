@@ -1,0 +1,60 @@
+module swap(clk,resetn,w,extern,rinext1,rinext2,rinext3,data,buswires,done);
+    parameter n=8;
+    input clk,resetn,w,extern,rinext1,rinext2,rinext3;
+    input [n-1:0]data;
+    output tri[n-1:0]buswires;
+    output done;
+    wire [n-1:0]r1,r2,r3;
+    wire r1in,r1out,r2in,r2out,r3in,r3out;
+    reg [1:0]y,Y;
+    parameter A=2'b00,B=2'b01,C=2'b10,D=2'b11;
+    
+    always@(posedge clk or negedge resetn)
+    if(resetn==0) y <= A;
+    else y <= Y;
+    
+    always@(w,y)
+    case(y)
+        A:if(w==0) Y <= A;
+        else Y <= B;
+        B: Y<=C;
+        C:Y<=D;
+        D:Y<=A;
+    endcase
+        
+        assign r2out=(y==B);
+        assign r3in=(y==B);
+        assign r3out=(y==C);
+        assign r1in=(y==C);
+        assign r1out=(y===D);
+        assign done=(y==D);
+        
+        regn reg1(buswires,r1in|rinext1,r1);
+        regn reg2(buswires,r2in|rinext2,r2);
+        regn reg3(buswires,r3in|rinext3,r3);
+        
+        trin tri_1(data,extern,buswires);
+        trin tri_2(r1,rinext1,buswires);
+        trin tri_3(r2,rinext2,buswires);
+        trin tri_4(r3,rinext3,buswires);
+endmodule
+        
+module regn(R,clk,L,Q);
+    input [7:0]R;
+    input clk,L;
+    output reg [7:0]Q;
+    
+    always@(posedge clk)
+    if(L)
+        Q<=R;
+endmodule    
+
+module trin(P,EN,F);
+    input [7:0]P;
+    input EN;
+    output [7:0]F;
+    
+    assign F=EN?P:8'Bz;
+endmodule
+
+       
