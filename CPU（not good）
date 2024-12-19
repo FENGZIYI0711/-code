@@ -1,0 +1,663 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// Design Name: 
+// Module Name: CPU
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+module top(
+    input clk,
+    input rst,
+    input add,
+    input [7:0]data,
+    input [3:0]F,
+    input [1:0]Rx,
+    input [1:0]Ry,
+    output [3:0] pos1,
+    output [3:0] pos2,
+    output [7:0] seg1,
+    output [7:0] seg2
+);
+    wire [3:0]PC;
+    wire [15:0]D;
+    wire w;
+    wire [15:0] file [15:0];
+    wire [7:0] R0;
+    wire [7:0] R1;
+    wire [7:0] R2;
+    wire [7:0] R3;
+    wire [7:0] A;
+    wire [7:0] G;
+    wire [15:0]BusWires;
+    wire [15:0]P;
+    wire [15:0] middle;
+   
+    xd xd1(clk,add,w);
+    CPU CPU1(clk,rst,w,data,F,Rx,Ry,D,R0,R1,R2,R3,A,G,BusWires,PC,P);
+    show show1(clk,rst,PC,D,pos1,pos2,seg1,seg2);
+
+endmodule
+
+module CPU(
+    input clk,
+    input rst,
+    input w,
+    input [7:0] Data, 
+    input [3:0] F, 
+    input [1:0]Rx, Ry,
+    output reg [15:0] BusWires,
+    output wire[7:0] R0,R1,R2,R3,
+    output wire [15:0] D,
+    output wire [7:0] A,G,
+    output wire [15:0] mul,
+    output wire [15:0] P,
+     output reg [3:0] PC,
+    output wire [15:0] middle,
+    output reg [3:0] Rin
+    );
+   
+    reg middle_in,middle_out;
+    reg mul_in,Pin;
+    reg PHout,PLout;
+    wire [15:0] result;
+    reg [15:0]file[15:0];
+    reg Done;
+    reg [7:0] Sum;
+    reg [3:0]Rout;
+    reg Ain,Gin,Gout,AddSub,Extern,Din;
+    reg [1:0] Count;
+    wire [3:0] I;
+    wire[3:0] Xreg,Y;
+    wire En;
+    wire [7:0] Func, FuncReg;
+    wire [8:0] Sel;
+    wire  [3:0] addr;
+    integer i;
+
+    wire Clear = rst | Done | (~w & ~Count[1] & ~Count[0]); 
+    assign Func = {F, Rx, Ry};
+    wire FRin = w & ~Count[1] & ~Count[0];
+
+    // 寄存器和解码器
+    regn functionreg (Func, FRin, clk, FuncReg);
+    assign I = FuncReg[7:4];
+    dec2to4 decX(FuncReg[3:2], 1'b1, Xreg);
+    dec2to4 decY(FuncReg[1:0], 1'b1, Y);
+    assign addr={Rx,Ry};
+   
+    always @(posedge clk)begin
+    if (Clear)
+        Count<= 0;
+    else
+        Count<=Count+1;
+        end
+
+    always @(Count, I, Xreg, Y) begin
+        Extern = 1'b0; Done = 1'b0; Ain = 1'b0; Gin = 1'b0; Din=1'b0;
+        Gout = 1'b0; AddSub = 1'b0; Rin = 4'b0; Rout = 4'b0;mul_in=1'b0;
+        middle_in=1'b0; middle_out=1'b0; Pin=1'b0; PHout=1'b0; PLout=1'b0;
+        case (Count)
+            2'b00: ; 
+            2'b01: 
+                case (I)
+                    4'b0000: begin
+                        Extern = 1'b1;
+                        Rin = Xreg;
+                        Done = 1'b1;
+                        file[PC]<=BusWires;
+                    end
+                    4'b0001: begin 
+                        Rout = Y;
+                        Rin = Xreg;
+                        Done = 1'b1;
+                        file[PC]<=BusWires;
+                    end
+                     4'b1111:begin
+                        Din=1'b1;
+                        Done=1'b1;
+                       file[PC]<=BusWires;
+                    end
+                    4'b0010,4'b0011:
+                    begin
+                        Rout=Xreg;
+                        Ain=1'b1;
+                    end
+                    4'b0100:
+                    begin
+                        Rout=Xreg;
+                        mul_in=1'b1;
+                    end
+                    4'b0101:
+                    begin
+                        PHout=1'b1;
+                        Rin=Xreg;
+                        Done=1'b1;
+                        file[PC]<=BusWires;
+                    end
+                    4'b0110:
+                    begin
+                        PLout=1'b1;
+                        Rin=Xreg;
+                        Done=1'b1;
+                        file[PC]<=BusWires;
+                    end
+                    default:;
+                endcase
+            2'b10: 
+                case (I)
+                    4'b0010: begin 
+                        Rout = Y;
+                        Gin = 1'b1;
+                    end
+                    4'b0011: begin 
+                        Rout = Y;
+                        AddSub = 1'b1;
+                        Gin = 1'b1;
+                    end
+                    4'b0100:begin
+                    Rout=Y;
+                    middle_in=1'b1;
+                end
+                default:;
+                endcase 
+            2'b11:
+                case (I)
+                    4'b0010, 4'b0011: begin
+                        Gout = 1'b1;
+                        Rin = Xreg;
+                        Done = 1'b1;
+                        file[PC]<=BusWires;
+                    end
+                 4'b0011:begin
+                        Gout=1'b1;
+                        Rin=Xreg;
+                        Done=1'b1;
+                        file[PC]<=BusWires;
+                    end
+                    4'b0100:begin
+                        middle_out=1'b1;
+                        Pin=1'b1;
+                        Done=1'b1;
+                        file[PC]<=BusWires;
+                    end
+                    default:;
+                endcase
+        endcase
+    end
+
+    regn reg_0(BusWires, Rin[0],clk, R0);
+    regn reg_1(BusWires, Rin[1],clk, R1);
+    regn reg_2(BusWires, Rin[2],clk, R2);
+    regn reg_3(BusWires, Rin[3],clk, R3);
+    regn reg_A(BusWires, Ain,clk, A);
+    regn reg_G(Sum, Gin,clk, G);
+    
+    regn1 M1(file[addr],clk,Din,D);
+    regn1 P1(BusWires,clk,Pin,P);
+    regn1 mul1(BusWires,clk,mul_in,mul);
+    regn1 B1(result,clk,middle_in,middle);
+
+    always @(AddSub, A, BusWires) begin
+        if (!AddSub)
+            Sum = A + BusWires;
+        else
+            Sum = A - BusWires;
+    end
+
+    assign Sel={Extern,Gout,middle_out,PHout,PLout,Rout};
+    
+    always @ (Sel, R0, R1, R2, R3, G,middle,P,Data) begin
+        if(Sel==9'b00000_0001)
+            BusWires={8'b0000_0000,R0};
+        else if(Sel==9'b00000_0010)
+            BusWires={8'b0000_0000,R1};     
+        else if(Sel==9'b00000_0100)     
+            BusWires={8'b0000_0000,R2};
+        else if(Sel==9'b00000_1000)
+            BusWires={8'b0000_0000,R3};
+        else if(Sel==9'b01000_0000)
+            BusWires={8'b0000_0000,G};
+        else if(Sel==9'b00100_0000)
+            BusWires=middle;
+        else if(Sel==9'b00010_0000)
+            BusWires={8'b0000_0000,P[15:8]};
+        else if(Sel==9'b00001_0000)
+            BusWires={8'b0000_0000,P[7:0]};
+        else if(Sel==9'b10000_0000)
+            BusWires={8'b0000_0000,Data};
+    end
+      
+    
+    always @(negedge rst or negedge Done) begin
+        if (!rst) 
+            PC <= 4'b0000; 
+        else if (Done) 
+            PC <= PC + 1;  
+        else
+            PC <= PC;
+    end
+    
+    multiple multiple1(mul,BusWires,result);
+
+endmodule
+
+module regn(
+    input [15:0]a,
+    input clk,
+    input EN,
+    output reg [7:0]b
+);
+    always@(posedge clk)begin
+        if(EN)
+            b<=a[7:0];
+    end
+endmodule
+
+module regn1(
+    input [15:0]a,
+    input clk,
+    input EN,
+    output reg [15:0]b
+);
+    always@(posedge clk)begin
+        if(EN)
+            b<=a;
+    end
+endmodule
+
+module dec2to4(
+    input [1:0]FuncReg,
+    input wire [1:0] W,
+    output reg [3:0]Y
+);
+    always@(*)begin
+    case(W)
+        2'b00:
+            Y=4'b0001;
+        2'b01:
+            Y=4'b0010;
+        2'b10:
+            Y=4'b0100;
+        2'b11:
+            Y=4'b1000;
+        default:Y=4'b0000;
+    endcase
+    end
+endmodule  
+
+module show(
+    input clk,
+    input  rst,
+    input [3:0] PC,
+    input [7:0] BusWires,
+    output [4:0] pos1,
+    output [4:0] pos2,
+    output [7:0] seg1,
+    output [7:0] seg2
+);
+    seg_f4 seg_f41(clk,rst,PC,pos1,seg1);
+    seg_b4 seg_b41(clk,rst,BusWires,pos2,seg2);
+endmodule
+
+
+module seg_f4 (
+    input wire clk,
+    input wire rst,
+    input [3:0] PC,
+    output reg [3:0]pos,
+    output reg [7:0]seg
+);
+    wire clk760hz;
+    reg [25:0]count;
+
+    assign clk760hz=count[16];
+
+    always@(posedge clk,negedge rst)
+        if(!rst)
+            count<=26'd0;
+        else 
+            count<=count+26'd1;
+            
+    reg [3:0]qianseat;
+    reg [3:0]baiseat;
+    reg [3:0]shiseat;
+    reg [3:0]geseat;
+    
+   always@(PC)begin
+     qianseat=PC[3:0];
+     shiseat=PC[7:4];
+     baiseat=PC[11:8];
+     geseat=PC[15:12];
+    end
+
+    reg [1:0]posC;
+    reg [3:0]dataP;
+
+    always@(posedge clk760hz or negedge rst)begin
+        if(!rst)
+            posC<=2'd0;
+        else
+            posC<=posC+2'd1;
+    end
+
+    always@(posedge clk760hz or negedge rst)begin
+        if(!rst)begin
+            pos=4'hF;
+        end
+        else begin
+            case(posC)
+            0:begin
+                pos=4'b0001;
+                dataP=geseat;
+                case (dataP)
+                    4'd0:seg=8'b0011_1111; 
+                    4'd1:seg=8'b0000_0110; 
+                    4'd2:seg=8'b0101_1011; 
+                    4'd3:seg=8'b0100_1111; 
+                    4'd4:seg=8'b0110_0110; 
+                    4'd5:seg=8'b0110_1101; 
+                    4'd6:seg=8'b0111_1101; 
+                    4'd7:seg=8'b0000_0111; 
+                    4'd8:seg=8'b0111_1111; 
+                    4'd9:seg=8'b0110_1111; 
+                    4'd10:seg=8'b0000_1000; 
+                    4'd11:seg=8'b0001_1000; 
+                    4'd12:seg=8'b0010_0000; 
+                    4'd13:seg=8'b0010_1000; 
+                    4'd14:seg=8'b0001_0000; 
+                    4'd15:seg=8'b0000_1000; 
+                    default :seg=8'b1111_1111; 
+                endcase
+            end
+            1:begin
+                pos=4'b0010;
+                dataP=shiseat;
+                case (dataP)
+                    4'd0:seg=8'b0011_1111; 
+                    4'd1:seg=8'b0000_0110; 
+                    4'd2:seg=8'b0101_1011; 
+                    4'd3:seg=8'b0100_1111; 
+                    4'd4:seg=8'b0110_0110; 
+                    4'd5:seg=8'b0110_1101; 
+                    4'd6:seg=8'b0111_1101; 
+                    4'd7:seg=8'b0000_0111; 
+                    4'd8:seg=8'b0111_1111; 
+                    4'd9:seg=8'b0110_1111; 
+                    4'd10:seg=8'b0000_1000; 
+                    4'd11:seg=8'b0001_1000; 
+                    4'd12:seg=8'b0010_0000; 
+                    4'd13:seg=8'b0010_1000; 
+                    4'd14:seg=8'b0001_0000; 
+                    4'd15:seg=8'b0000_1000; 
+                    default :seg=8'b1111_1111; 
+                endcase
+            end
+            2:begin
+                pos=4'b0100;
+                dataP=baiseat;
+                case (dataP)
+                    4'd0:seg=8'b0011_1111; 
+                    4'd1:seg=8'b0000_0110; 
+                    4'd2:seg=8'b0101_1011; 
+                    4'd3:seg=8'b0100_1111; 
+                    4'd4:seg=8'b0110_0110; 
+                    4'd5:seg=8'b0110_1101; 
+                    4'd6:seg=8'b0111_1101; 
+                    4'd7:seg=8'b0000_0111; 
+                    4'd8:seg=8'b0111_1111; 
+                    4'd9:seg=8'b0110_1111; 
+                    4'd10:seg=8'b0000_1000; 
+                    4'd11:seg=8'b0001_1000; 
+                    4'd12:seg=8'b0010_0000; 
+                    4'd13:seg=8'b0010_1000; 
+                    4'd14:seg=8'b0001_0000; 
+                    4'd15:seg=8'b0000_1000; 
+                    default :seg=8'b1111_1111;       
+                endcase
+            end
+            3:begin
+                pos=4'b1000;
+                dataP=qianseat;
+                case (dataP)
+                    4'd0:seg=8'b0011_1111; 
+                    4'd1:seg=8'b0000_0110; 
+                    4'd2:seg=8'b0101_1011; 
+                    4'd3:seg=8'b0100_1111; 
+                    4'd4:seg=8'b0110_0110; 
+                    4'd5:seg=8'b0110_1101; 
+                    4'd6:seg=8'b0111_1101; 
+                    4'd7:seg=8'b0000_0111; 
+                    4'd8:seg=8'b0111_1111; 
+                    4'd9:seg=8'b0110_1111; 
+                    4'd10:seg=8'b0000_1000; 
+                    4'd11:seg=8'b0001_1000; 
+                    4'd12:seg=8'b0010_0000; 
+                    4'd13:seg=8'b0010_1000; 
+                    4'd14:seg=8'b0001_0000; 
+                    4'd15:seg=8'b0000_1000; 
+                    default :seg=8'b1111_1111; 
+                endcase
+            end
+            endcase
+        end
+    end
+endmodule
+
+module seg_b4 (
+    input wire clk,
+    input wire rst,
+    input  [15:0] D,
+    output reg [3:0]pos,
+    output reg [7:0]seg
+);
+    wire clk760hz;
+    reg [25:0]count;
+
+    assign clk760hz=count[16];
+
+    always@(posedge clk,negedge rst)
+        if(!rst)
+            count<=26'd0;
+        else 
+            count<=count+26'd1;
+
+    reg [3:0]qianseat;
+    reg [3:0]baiseat;
+    reg [3:0]shiseat;
+    reg [3:0]geseat;
+    
+    always@(D)begin
+     qianseat =D[15:12];
+     baiseat =D[11:8];
+     shiseat =D[7:4];
+     geseat= D[3:0];
+    end
+
+    reg [1:0]posC;
+    reg [3:0]dataP;
+
+    always@(posedge clk760hz,negedge rst)begin
+        if(!rst)
+            posC<=2'd0;
+        else
+            posC<=posC+2'd1;
+    end
+
+    always@(posedge clk760hz,negedge rst)begin
+        if(!rst)begin
+            pos=4'hF;
+        end
+        else begin
+            case(posC)
+            0:begin
+                pos=4'b0001;
+                dataP=geseat;
+                case (dataP)
+                    4'd0:seg=8'b0011_1111; 
+                    4'd1:seg=8'b0000_0110; 
+                    4'd2:seg=8'b0101_1011; 
+                    4'd3:seg=8'b0100_1111; 
+                    4'd4:seg=8'b0110_0110; 
+                    4'd5:seg=8'b0110_1101; 
+                    4'd6:seg=8'b0111_1101; 
+                    4'd7:seg=8'b0000_0111; 
+                    4'd8:seg=8'b0111_1111; 
+                    4'd9:seg=8'b0110_1111; 
+                    4'd10:seg=8'b0000_1000; 
+                    4'd11:seg=8'b0001_1000; 
+                    4'd12:seg=8'b0010_0000; 
+                    4'd13:seg=8'b0010_1000; 
+                    4'd14:seg=8'b0001_0000; 
+                    4'd15:seg=8'b0000_1000; 
+                    default :seg=8'b1111_1111; 
+                endcase
+            end
+            1:begin
+                pos=4'b0010;
+                dataP=shiseat;
+                case (dataP)
+                    4'd0:seg=8'b0011_1111; 
+                    4'd1:seg=8'b0000_0110; 
+                    4'd2:seg=8'b0101_1011; 
+                    4'd3:seg=8'b0100_1111; 
+                    4'd4:seg=8'b0110_0110; 
+                    4'd5:seg=8'b0110_1101; 
+                    4'd6:seg=8'b0111_1101; 
+                    4'd7:seg=8'b0000_0111; 
+                    4'd8:seg=8'b0111_1111; 
+                    4'd9:seg=8'b0110_1111; 
+                    4'd10:seg=8'b0000_1000; 
+                    4'd11:seg=8'b0001_1000; 
+                    4'd12:seg=8'b0010_0000; 
+                    4'd13:seg=8'b0010_1000; 
+                    4'd14:seg=8'b0001_0000; 
+                    4'd15:seg=8'b0000_1000; 
+                    default :seg=8'b1111_1111; 
+                endcase
+            end
+            2:begin
+                pos=4'b0100;
+                dataP=baiseat;
+                case (dataP)
+                    4'd0:seg=8'b0011_1111; 
+                    4'd1:seg=8'b0000_0110; 
+                    4'd2:seg=8'b0101_1011; 
+                    4'd3:seg=8'b0100_1111; 
+                    4'd4:seg=8'b0110_0110; 
+                    4'd5:seg=8'b0110_1101; 
+                    4'd6:seg=8'b0111_1101; 
+                    4'd7:seg=8'b0000_0111; 
+                    4'd8:seg=8'b0111_1111; 
+                    4'd9:seg=8'b0110_1111; 
+                    4'd10:seg=8'b0000_1000; 
+                    4'd11:seg=8'b0001_1000; 
+                    4'd12:seg=8'b0010_0000; 
+                    4'd13:seg=8'b0010_1000; 
+                    4'd14:seg=8'b0001_0000; 
+                    4'd15:seg=8'b0000_1000; 
+                    default :seg=8'b1111_1111;           
+                endcase
+            end
+            3:begin
+                pos=4'b1000;
+                dataP=qianseat;
+                case (dataP)
+                    4'd0:seg=8'b0011_1111; 
+                    4'd1:seg=8'b0000_0110; 
+                    4'd2:seg=8'b0101_1011; 
+                    4'd3:seg=8'b0100_1111; 
+                    4'd4:seg=8'b0110_0110; 
+                    4'd5:seg=8'b0110_1101; 
+                    4'd6:seg=8'b0111_1101; 
+                    4'd7:seg=8'b0000_0111; 
+                    4'd8:seg=8'b0111_1111; 
+                    4'd9:seg=8'b0110_1111; 
+                    4'd10:seg=8'b0000_1000; 
+                    4'd11:seg=8'b0001_1000; 
+                    4'd12:seg=8'b0010_0000; 
+                    4'd13:seg=8'b0010_1000; 
+                    4'd14:seg=8'b0001_0000; 
+                    4'd15:seg=8'b0000_1000; 
+                    default :seg=8'b1111_1111; 
+                endcase
+            end
+            endcase
+        end
+    end
+endmodule
+
+module xd(
+    input clk,
+    input add,
+    output add_xd
+);
+    reg [20:0] cnt_xd = 21'b0000;
+    wire [4:0]key;//存储按键状态
+    reg [4:0] key_out; 
+    parameter xd = 21'd2000000;    //计时20ms
+
+    assign key[0]=add;
+    
+     always@(posedge clk) begin    //消抖计时
+    if(key == 5'b00000)    //抖动检测周期开始
+        cnt_xd <= 0;
+    else if(cnt_xd == xd)
+        cnt_xd <= xd;
+    else
+        cnt_xd <= cnt_xd+ 1;
+    end
+
+    always@(posedge clk) begin
+    if(cnt_xd == 0)
+        key_out<=5'b00000;
+    else if(cnt_xd == (xd - 21'b1))  
+        case(key) 
+        5'b00001: key_out <= 5'b00001; 
+        endcase
+    else
+        key_out<=5'b00000;
+    end
+    
+    assign add_xd=key_out[0];
+    
+endmodule
+
+module multiple(
+    input [15:0] mul,
+    input [15:0] bus,
+    output wire [15:0] result
+);  
+
+    reg [15:0] ff[7:0];
+    reg [15:0] ee;
+
+    integer i; 
+
+    always @(*) begin
+        ee = 0;  
+        for (i = 0; i < 8; i = i + 1) begin
+            if (bus[i]) begin
+                ff[i] = mul << i;
+            end else begin
+                ff[i] = 0;
+            end
+            ee = ee + ff[i];  
+        end
+    end
+
+    assign  result =ee;  
+
+endmodule
+
+
